@@ -4,4 +4,5 @@
     <string name="enter_name">Please Enter Name</string>
     <string name="enter_empId">Please Enter EmpId</string>
     <string name="user_added_successfully">User Added Successfully</string>
+    <string name="already_applied">This User Already Applied To The Event</string>
 </resources>

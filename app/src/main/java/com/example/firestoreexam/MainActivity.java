@@ -16,28 +16,30 @@ import android.widget.Toast;
 
 import com.firebase.ui.firestore.FirestoreRecyclerAdapter;
 import com.firebase.ui.firestore.FirestoreRecyclerOptions;
-import com.google.android.gms.tasks.OnFailureListener;
-import com.google.android.gms.tasks.OnSuccessListener;
-import com.google.firebase.firestore.DocumentReference;
+import com.google.firebase.firestore.CollectionReference;
 import com.google.firebase.firestore.FirebaseFirestore;
 import com.google.firebase.firestore.Query;
+import com.google.firebase.firestore.QuerySnapshot;
 
 import java.text.SimpleDateFormat;
 import java.util.Date;
 
 public class MainActivity extends AppCompatActivity implements View.OnClickListener {
 
+    private final String NAME = "name";
+    private final String EMP_ID = "empId";
+    private final String USERS = "Users";
+    private final String EVENT = "Event";
+
     private Context context;
 
-    private FirebaseFirestore firestore;
+    private FirebaseFirestore fireStore;
+    private CollectionReference collectionReference;
     private RecyclerView recyclerView;
     private FirestoreRecyclerAdapter adapter;
 
     private EditText editTextName;
     private EditText editTextEmpId;
-
-    private String name;
-    private String empId;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -46,7 +48,7 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
 
         context = this;
 
-        firestore = FirebaseFirestore.getInstance();
+        fireStore = FirebaseFirestore.getInstance();
         recyclerView = findViewById(R.id.recyclerView);
 
         editTextName = findViewById(R.id.editTextName);
@@ -56,7 +58,8 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         SimpleDateFormat simpleDateFormat = new SimpleDateFormat("yyyy-MM-dd");
         String today = simpleDateFormat.format(new Date());
 
-        Query query = firestore.collection("Users").orderBy("empId");
+        collectionReference = fireStore.collection(EVENT).document(today).collection(USERS);
+        Query query = collectionReference.orderBy(EMP_ID);
 
         FirestoreRecyclerOptions<UserModel> options = new FirestoreRecyclerOptions.Builder<UserModel>()
                 .setQuery(query, UserModel.class)
@@ -73,8 +76,10 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
 
             @Override
             protected void onBindViewHolder(@NonNull UserViewHolder holder, int position, @NonNull UserModel model) {
-                holder.textViewName.setText("Name : " + model.getName());
-                holder.textViewEmpId.setText("EmpId : " + model.getEmpId());
+                String userName = "Name : " + model.getName();
+                String userEmpId = "EmpId : " + model.getEmpId();
+                holder.textViewName.setText(userName);
+                holder.textViewEmpId.setText(userEmpId);
             }
         };
 
@@ -84,8 +89,8 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
 
     private class UserViewHolder extends RecyclerView.ViewHolder {
 
-        private TextView textViewName;
-        private TextView textViewEmpId;
+        private final TextView textViewName;
+        private final TextView textViewEmpId;
 
         public UserViewHolder(@NonNull View itemView) {
             super(itemView);
@@ -111,25 +116,16 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
     public void onClick(View v) {
         switch (v.getId()) {
             case R.id.button: {
-                if (userValidation()) {
-                    firestore.collection("Users").add(getUser())
-                            .addOnSuccessListener(documentReference -> {
-                                        editTextName.setText("");
-                                        editTextEmpId.setText("");
-                                        Toast.makeText(context, getString(R.string.user_added_successfully), Toast.LENGTH_SHORT).show();
-                                    }
-                            ).addOnFailureListener(e -> {
-                                    Toast.makeText(context, "Error : " + e.getMessage(), Toast.LENGTH_SHORT).show();
-                            });
+                String name = editTextName.getText().toString();
+                String empId = editTextEmpId.getText().toString();
+                if (userValidation(name, empId)) {
+                    empIdDuplicationValidation(name, empId);
                 }
             }
         }
     }
 
-    private boolean userValidation() {
-        name = editTextName.getText().toString();
-        empId = editTextEmpId.getText().toString();
-
+    private boolean userValidation(String name, String empId) {
         if ("".equals(name)) {
             Toast.makeText(context, getString(R.string.enter_name), Toast.LENGTH_SHORT).show();
             return false;
@@ -141,7 +137,28 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         }
     }
 
-    private UserModel getUser() {
+    private void empIdDuplicationValidation(String name, String empId) {
+        collectionReference.whereEqualTo(EMP_ID, empId).get().addOnCompleteListener(task -> {
+            if (task.isSuccessful()) {
+                QuerySnapshot snapShot = task.getResult();
+                if (snapShot.isEmpty()) {
+                    collectionReference.add(getUser(name, empId))
+                            .addOnSuccessListener(documentReference -> {
+                                        editTextName.setText("");
+                                        editTextEmpId.setText("");
+                                        Toast.makeText(context, getString(R.string.user_added_successfully), Toast.LENGTH_SHORT).show();
+                                    }
+                            ).addOnFailureListener(e -> {
+                        Toast.makeText(context, "Error : " + e.getMessage(), Toast.LENGTH_SHORT).show();
+                    });
+                } else {
+                    Toast.makeText(context, R.string.already_applied, Toast.LENGTH_SHORT).show();
+                }
+            }
+        });
+    }
+
+    private UserModel getUser(String name, String empId) {
         UserModel userModel = new UserModel(name, empId);
         return userModel;
     }
